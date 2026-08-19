@@ -1,0 +1,19 @@
+define Device/ruijie_rg-ma3063
+  $(call Device/FitImageLzma)
+  $(call Device/UbiFit)
+  DEVICE_VENDOR := Ruijie
+  DEVICE_MODEL := RG-MA3063
+  DEVICE_DTS := ipq5018-ruijie-rg-ma3063
+  DEVICE_DTS_CONFIG := config@mp03.5-c2
+  SOC := ipq5018
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  NAND_SIZE := 128m
+  IMAGE_SIZE := 51200k
+  DEVICE_PACKAGES := \
+    ath11k-firmware-ipq5018 \
+    kmod-ath11k-ahb \
+    kmod-ath11k-pci \
+    wpad
+endef
+TARGET_DEVICES += ruijie_rg-ma3063

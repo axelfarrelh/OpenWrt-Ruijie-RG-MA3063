@@ -1,0 +1,20 @@
+# OpenWrt source and build products
+openwrt/
+baseline-source/
+dl/
+# Router-specific data and sensitive backups
+backup/
+stock-firmware/
+router-data/
+*.bin
+*.itb
+*.img
+*.ubi
+*.tar
+*.tar.gz
+*.log
+
+# Local configuration and editor files
+.env
+.vscode/
+.idea/
