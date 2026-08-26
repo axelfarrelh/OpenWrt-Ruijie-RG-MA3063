@@ -2,7 +2,9 @@
 /*
  * Device Tree Source for Ruijie RG-MA3063
  *
- * Baseline: Manssizz/build-ma3063 at 6af78c2bbb57a373fe7355e4ab4550e980899987.
+ * Ethernet topology verified by RAM boot: chassis LAN1 is the direct dp1 PHY;
+ * chassis LAN2-LAN4 are QCA8337 switch ports 1-3 through dp2. GPIO26 is the
+ * OEM-confirmed active-low switch reset.
  * LEDs are intentionally deferred until core platform validation.
  */
 
@@ -24,7 +26,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs-append = " ubi.mtd=rootfs root=mtd:ubi_rootfs rootfstype=squashfs rootwait coherent_pool=2M";
+		bootargs-append = " ubi.mtd=rootfs ubi.block=0,3 root=/dev/ubiblock0_3 rootfstype=squashfs rootwait coherent_pool=2M";
 	};
 
 	memory@40000000 {
@@ -38,7 +40,7 @@
 		reset {
 			label = "reset";
 			linux,code = <KEY_RESTART>;
-			gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
+			gpios = <&tlmm 33 GPIO_ACTIVE_LOW>;
 			debounce-interval = <60>;
 		};
 	};
@@ -48,11 +50,17 @@
 	status = "okay";
 };
 
+&qpic_bam {
+	status = "okay";
+};
+
 &qpic_nand {
 	status = "okay";
 
 	nand@0 {
+		compatible = "spi-nand";
 		reg = <0>;
+		nand-ecc-engine = <&qpic_nand>;
 		nand-ecc-strength = <4>;
 		nand-ecc-step-size = <512>;
 		nand-bus-width = <8>;
@@ -113,9 +121,9 @@
 	pinctrl-names = "default";
 	reset-gpios = <&tlmm 26 GPIO_ACTIVE_LOW>;
 
+	qca8337_phy0: ethernet-phy@0 { reg = <0>; };
 	qca8337_phy1: ethernet-phy@1 { reg = <1>; };
 	qca8337_phy2: ethernet-phy@2 { reg = <2>; };
-	qca8337_phy3: ethernet-phy@3 { reg = <3>; };
 
 	switch1: ethernet-switch@17 {
 		compatible = "qca,qca8337";
@@ -127,10 +135,9 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			port@2 { reg = <2>; label = "lan1"; phy-handle = <&qca8337_phy1>; };
-			port@3 { reg = <3>; label = "lan2"; phy-handle = <&qca8337_phy2>; };
-			port@4 { reg = <4>; label = "lan3"; phy-handle = <&qca8337_phy3>; };
-
+			port@1 { reg = <1>; label = "lan1"; phy-handle = <&qca8337_phy0>; };
+			port@2 { reg = <2>; label = "lan2"; phy-handle = <&qca8337_phy1>; };
+			port@3 { reg = <3>; label = "lan3"; phy-handle = <&qca8337_phy2>; };
 			port@6 {
 				reg = <6>;
 				label = "cpu";
@@ -163,11 +170,12 @@
 			bias-pull-up;
 		};
 	};
+
 };
 
 &switch {
 	status = "okay";
-	switch_mac_mode = <0>;
+	switch_mac_mode = <MAC_MODE_SGMII_CHANNEL0>;
 
 	qcom,port_phyinfo {
 		port@0 { port_id = <1>; mdiobus = <&mdio0>; phy_address = <7>; };
@@ -177,7 +185,6 @@
 
 &dp1 {
 	status = "okay";
-	label = "wan";
 	nvmem-cells = <&macaddr_art_eth>;
 	nvmem-cell-names = "mac-address";
 };
@@ -195,7 +202,8 @@
 };
 
 &q6v5_wcss {
-	boot-args = <0x1 4 2 0 0 0>;
+	/* Verified from the OEM config@mp03.5-c1 device tree. */
+	boot-args = <0x2 4 2 18 0 0>;
 };
 
 &wifi {

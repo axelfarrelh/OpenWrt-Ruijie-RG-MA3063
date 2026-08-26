@@ -1,0 +1,154 @@
+From: OpenWrt RG-MA3063 project
+Subject: image: support explicit OEM UBI volume ordering and rootfs name
+
+The RG-MA3063 OEM UBI keeps kernel, wifi_fw, and bt_fw before the
+ubi_rootfs and rootfs_data volumes. Allow a device image recipe to put the
+kernel before its extra parts, mark it static, and select the root volume name.
+
+--- a/include/image.mk
++++ b/include/image.mk
+@@ -515,6 +515,9 @@ define Device/Default
+ 
+   UBOOTENV_IN_UBI :=
+   KERNEL_IN_UBI :=
++  UBI_KERNEL_FIRST :=
++  UBI_KERNEL_STATIC :=
++  UBI_ROOTFS_NAME :=
+   BLOCKSIZE :=
+   PAGESIZE :=
+   SUBPAGESIZE :=
+@@ -554,7 +557,8 @@ endef
+ DEFAULT_DEVICE_VARS := \
+   DEVICE_NAME KERNEL KERNEL_INITRAMFS KERNEL_INITRAMFS_IMAGE KERNEL_SIZE \
+   CMDLINE UBOOTENV_IN_UBI KERNEL_IN_UBI BLOCKSIZE PAGESIZE SUBPAGESIZE \
+-  VID_HDR_OFFSET UBINIZE_OPTS UBINIZE_PARTS MKUBIFS_OPTS DEVICE_DTC_FLAGS \
++  UBI_KERNEL_FIRST UBI_KERNEL_STATIC UBI_ROOTFS_NAME VID_HDR_OFFSET \
++  UBINIZE_OPTS UBINIZE_PARTS MKUBIFS_OPTS DEVICE_DTC_FLAGS \
+   DEVICE_DTCO_FLAGS DEVICE_DTS DEVICE_DTS_CONFIG DEVICE_DTS_DELIMITER \
+   DEVICE_DTS_DIR DEVICE_DTS_OVERLAY DEVICE_DTS_LOADADDR \
+   DEVICE_FDT_NUM DEVICE_IMG_PREFIX SOC BOARD_NAME UIMAGE_MAGIC UIMAGE_NAME \
+--- a/include/image-commands.mk
++++ b/include/image-commands.mk
+@@ -197,6 +197,9 @@ define Build/append-ubi
+ 		$(if $(UBOOTENV_IN_UBI),--uboot-env) \
+ 		$(if $(KERNEL_IN_UBI),--kernel $(IMAGE_KERNEL)) \
+ 		$(foreach part,$(UBINIZE_PARTS),--part $(part)) \
++		$(if $(UBI_KERNEL_FIRST),--kernel-first) \
++		$(if $(UBI_KERNEL_STATIC),--kernel-static) \
++		$(if $(UBI_ROOTFS_NAME),--rootfs-name $(UBI_ROOTFS_NAME)) \
+ 		--rootfs $(IMAGE_ROOTFS) \
+ 		$@.tmp \
+ 		-p $(BLOCKSIZE:%k=%KiB) -m $(PAGESIZE) \
+--- a/scripts/ubinize-image.sh
++++ b/scripts/ubinize-image.sh
+@@ -7,6 +7,9 @@ ubootenv=""
+ ubinize_param=""
+ kernel=""
+ rootfs=""
++kernel_first=""
++kernel_static=""
++rootfs_name="rootfs"
+ outfile=""
+ err=""
+ ubinize_seq=""
+@@ -34,6 +37,15 @@ ubivol() {
+ 	fi
+ }
+ 
++ubikernel() {
++	local vol_id="$1"
++	local image="$2"
++	local voltype="dynamic"
++
++	[ "$kernel_static" ] && voltype="static"
++	ubivol "$vol_id" kernel "$image" "" "" "$voltype"
++}
++
+ ubilayout() {
+ 	local vol_id=0
+ 	local rootsize
+@@ -43,6 +55,10 @@ ubilayout() {
+ 	local voltype
+ 
+ 	rootfs_type="$( get_fs_type "$2" )"
++	if [ "$3" ] && [ "$kernel_first" ]; then
++		ubikernel "$vol_id" "$3"
++		vol_id=$(( vol_id + 1 ))
++	fi
+ 	if [ "$1" = "ubootenv" ]; then
+ 		ubivol $vol_id ubootenv
+ 		vol_id=$(( vol_id + 1 ))
+@@ -74,8 +90,8 @@ ubilayout() {
+ 		ubivol $vol_id "$name" "$image" "" "${size}" "$voltype"
+ 		vol_id=$(( vol_id + 1 ))
+ 	done
+-	if [ "$3" ]; then
+-		ubivol $vol_id kernel "$3"
++	if [ "$3" ] && [ -z "$kernel_first" ]; then
++		ubikernel "$vol_id" "$3"
+ 		vol_id=$(( vol_id + 1 ))
+ 	fi
+ 
+@@ -90,7 +108,7 @@ ubilayout() {
+ 			rootsize="$( round_up "$( stat -c%s "$2" )" 1024 )"
+ 			;;
+ 		esac
+-		ubivol $vol_id rootfs "$2" "$autoresize" "$rootsize"
++		ubivol $vol_id "$rootfs_name" "$2" "$autoresize" "$rootsize"
+ 
+ 		vol_id=$(( vol_id + 1 ))
+ 		[ "$rootfs_type" = "ubifs" ] || ubivol $vol_id rootfs_data "" 1
+@@ -110,6 +128,22 @@ while [ "$1" ]; do
+ 		shift
+ 		continue
+ 		;;
++	"--kernel-first")
++		kernel_first="1"
++		shift
++		continue
++		;;
++	"--kernel-static")
++		kernel_static="1"
++		shift
++		continue
++		;;
++	"--rootfs-name")
++		rootfs_name="$2"
++		shift
++		shift
++		continue
++		;;
+ 	"--kernel")
+ 		kernel="$2"
+ 		shift
+@@ -129,5 +163,5 @@ done
+ 
+ if [ ! -r "$rootfs" ] && [ ! -r "$kernel" ] && [ ! "$parts" ] && [ ! "$outfile" ]; then
+-	echo "syntax: $0 [--uboot-env] [--part <name>=<file>] [--kernel kernelimage] [--rootfs rootfsimage] out [ubinize opts]"
++	echo "syntax: $0 [--uboot-env] [--kernel-first] [--kernel-static] [--rootfs-name name] [--part <name>=<file>] [--kernel kernelimage] [--rootfs rootfsimage] out [ubinize opts]"
+ 	exit 1
+ fi
+--- a/package/base-files/files/lib/upgrade/nand.sh
++++ b/package/base-files/files/lib/upgrade/nand.sh
+@@ -10,6 +10,7 @@ CI_KERNPART="${CI_KERNPART:-kernel}"
+ # There are also CI_KERN_UBIPART and CI_ROOT_UBIPART if kernel
+ # and rootfs are on separated UBIs.
+ CI_UBIPART="${CI_UBIPART:-ubi}"
++CI_KERN_VOLTYPE="${CI_KERN_VOLTYPE:-dynamic}"
+ 
+ # 'rootfs' UBI volume on NAND contains the rootfs
+ CI_ROOTPART="${CI_ROOTPART:-rootfs}"
+@@ -229,7 +230,12 @@ nand_upgrade_prepare_ubi() {
+ 
+ 	# create kernel vol
+ 	if [ -n "$kernel_length" ]; then
+-		if ! ubimkvol /dev/$kern_ubidev -N "$CI_KERNPART" -s $kernel_length; then
++		if [ "$CI_KERN_VOLTYPE" = "static" ]; then
++			ubimkvol /dev/$kern_ubidev -N "$CI_KERNPART" -t static -s $kernel_length || {
++				echo "cannot create kernel volume"
++				return 1
++			}
++		elif ! ubimkvol /dev/$kern_ubidev -N "$CI_KERNPART" -s $kernel_length; then
+ 			echo "cannot create kernel volume"
+ 			return 1;
+ 		fi

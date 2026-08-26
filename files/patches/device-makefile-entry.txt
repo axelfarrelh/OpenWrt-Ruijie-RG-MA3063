@@ -4,16 +4,24 @@ define Device/ruijie_rg-ma3063
   DEVICE_VENDOR := Ruijie
   DEVICE_MODEL := RG-MA3063
   DEVICE_DTS := ipq5018-ruijie-rg-ma3063
-  DEVICE_DTS_CONFIG := config@mp03.5-c2
+  DEVICE_DTS_CONFIG := config@mp03.5-c1
   SOC := ipq5018
   BLOCKSIZE := 128k
   PAGESIZE := 2048
   NAND_SIZE := 128m
   IMAGE_SIZE := 51200k
+  KERNEL_IN_UBI := 1
+  UBI_KERNEL_FIRST := 1
+  UBI_KERNEL_STATIC := 1
+  UBI_ROOTFS_NAME := ubi_rootfs
+  UBINIZE_PARTS := \
+    wifi_fw=:$(TOPDIR)/target/linux/qualcommax/image/rg-ma3063-oem/wifi_fw.bin \
+    bt_fw=:$(TOPDIR)/target/linux/qualcommax/image/rg-ma3063-oem/bt_fw.bin
   DEVICE_PACKAGES := \
-    ath11k-firmware-ipq5018 \
+    ath11k-firmware-ipq5018-qcn6122 \
     kmod-ath11k-ahb \
     kmod-ath11k-pci \
+    kmod-qca-nss-dp \
     wpad
 endef
 TARGET_DEVICES += ruijie_rg-ma3063

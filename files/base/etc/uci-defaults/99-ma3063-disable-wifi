@@ -1,0 +1,13 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+disable_radio() {
+	uci set "wireless.$1.disabled=1"
+}
+
+config_load wireless
+config_foreach disable_radio wifi-device
+uci commit wireless
+
+exit 0

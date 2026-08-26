@@ -1,0 +1,66 @@
+#!/bin/sh
+
+. /lib/functions/uci-defaults.sh
+. /lib/functions/system.sh
+
+ipq50xx_setup_interfaces()
+{
+	local board="$1"
+	case $board in
+	elecom,wrc-x3000gs2|\
+	iodata,wn-dax3000gr|\
+	linksys,mr5500|\
+	zyxel,scr50axe)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
+		;;
+	glinet,gl-b3000)
+		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
+		;;
+	cmcc,pz-l8|\
+	linksys,mx2000|\
+	linksys,mx5500|\
+	linksys,spnmx56|\
+	xiaomi,ax6000)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"
+		;;
+	linksys,mx6200|\
+	yuncore,ax830|\
+	yuncore,ax850)
+		ucidef_set_interfaces_lan_wan "lan" "wan"
+		;;
+	ruijie,rg-ma3063)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "eth0"
+		;;
+	esac
+}
+
+ipq50xx_setup_macs()
+{
+	local board="$1"
+	local envdev envcfg label_mac lan_mac
+
+	[ "$board" = "ruijie,rg-ma3063" ] || return 0
+	envdev=$(find_mtd_part "0:APPSBLENV")
+	[ -n "$envdev" ] || return 0
+
+	envcfg=/tmp/rg-ma3063-fw_env.config
+	printf "%s 0x0 0x40000 0x20000\n" "$envdev" > "$envcfg"
+	label_mac=$(fw_printenv -c "$envcfg" -n ethaddr 2>/dev/null)
+	rm -f "$envcfg"
+	[ -n "$label_mac" ] || return 0
+
+	lan_mac=$(macaddr_add "$label_mac" 1)
+	ucidef_set_interface_macaddr "wan" "$label_mac"
+	ucidef_set_interface_macaddr "lan" "$lan_mac"
+	ucidef_set_network_device_mac "eth0" "$label_mac"
+	ucidef_set_network_device_mac "eth1" "$lan_mac"
+	ucidef_set_label_macaddr "$label_mac"
+}
+
+board_config_update
+board=$(board_name)
+ipq50xx_setup_interfaces $board
+ipq50xx_setup_macs $board
+board_config_flush
+
+exit 0

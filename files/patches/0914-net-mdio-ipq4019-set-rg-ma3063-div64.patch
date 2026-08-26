@@ -1,0 +1,36 @@
+--- a/drivers/net/mdio/mdio-ipq4019.c
++++ b/drivers/net/mdio/mdio-ipq4019.c
+@@ -55,6 +55,7 @@ struct ipq4019_mdio_data {
+ 	void __iomem *eth_ldo_rdy;
+ 	struct clk *mdio_clk;
+ 	unsigned int mdc_rate;
++	bool rg_ma3063_div64;
+ };
+ 
+ static int ipq4019_mdio_wait_busy(struct mii_bus *bus)
+@@ -222,6 +223,14 @@ static int ipq4019_mdio_set_div(struct i
+ 	int div;
+ 	u32 val;
+ 
++	if (priv->rg_ma3063_div64) {
++		val = readl(priv->membase + MDIO_MODE_REG);
++		val &= ~MDIO_MODE_DIV_MASK;
++		val |= MDIO_MODE_DIV(64);
++		writel(val, priv->membase + MDIO_MODE_REG);
++		return 0;
++	}
++
+ 	/* If we don't have a clock for AHB use the fixed value */
+ 	ahb_rate = IPQ_MDIO_CLK_RATE;
+ 	if (priv->mdio_clk)
+@@ -339,6 +348,10 @@ static int ipq4019_mdio_probe(struct pla
+ 	if (IS_ERR(priv->membase))
+ 		return PTR_ERR(priv->membase);
+ 
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	priv->rg_ma3063_div64 = of_machine_is_compatible("ruijie,rg-ma3063") &&
++		res && res->start == 0x90000;
++
+ 	priv->mdio_clk = devm_clk_get_optional(&pdev->dev, "gcc_mdio_ahb_clk");
+ 	if (IS_ERR(priv->mdio_clk))
+ 		return PTR_ERR(priv->mdio_clk);
