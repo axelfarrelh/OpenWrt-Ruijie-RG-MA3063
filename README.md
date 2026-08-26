@@ -1,99 +1,129 @@
-# OpenWrt For Ruijie RG-MA3063
+# OpenWrt for Ruijie RG-MA3063
 
-Experimental, reproducible OpenWrt build work for the Ruijie RG-MA3063.
+Hardware-validated OpenWrt support for the Ruijie RG-MA3063, built against
+OpenWrt 25.12.5 (`r33051-f5dae5ece4`) on the `qualcommax/ipq50xx` target.
 
 ## Status
 
-The firmware build has completed, but no image has been tested on physical hardware. It produces:
+OpenWrt boots persistently from NAND through the stock Qualcomm U-Boot. The
+validated installation has passed automatic reboot and cold power-cycle tests.
 
-- An initramfs FIT image for non-destructive TFTP/RAM boot testing.
-- Candidate NAND/UBI images for structural inspection only.
+Working:
 
-Do not flash any generated permanent image until UART/TFTP validation has completed.
+- NAND boot with OEM `bootipq` and FIT configuration `config@mp03.5-c1`.
+- SquashFS root on `ubi_rootfs` with a UBIFS `rootfs_data` overlay.
+- IPQ5018 2.4 GHz and QCN6122 5 GHz radios with device calibration.
+- Direct IPQ5018 Ethernet PHY and QCA8337 DSA switch.
+- All four chassis Ethernet sockets.
+- NSS dataplane, LuCI, SSH, sysupgrade, and OEM-slot fallback.
 
-## Current Build
+Open issues:
 
-The current build is based on OpenWrt `openwrt-25.12` commit
-`4a5c6b90d21522d2663ce2718c973f9e845f2119`. Build products are intentionally
-ignored by Git and remain in the Linux build tree:
+- ath11k uses most of the available RAM when both radios are loaded. Ring-size
+  reduction is being evaluated in RAM-only builds and is not part of the
+  known-good baseline.
+- The watchdog and CPU-frequency drivers report missing-clock warnings.
+- OpenWrt does not yet install a persistent `/etc/fw_env.config`.
+- LEDs are not implemented.
+
+See [docs/known-issues.md](docs/known-issues.md) for details.
+
+## Device
+
+| Component | Hardware |
+|---|---|
+| SoC | Qualcomm IPQ5018, dual Cortex-A53 |
+| RAM | 256 MiB, about 181 MiB visible to Linux |
+| Flash | 128 MiB Winbond W25N01GW SPI-NAND, 4-bit ECC |
+| 2.4 GHz | IPQ5018 internal radio, ath11k AHB |
+| 5 GHz | QCN6122, ath11k PCI/multipd |
+| Ethernet | One direct IPQ5018 PHY plus QCA8337 switch |
+| Serial | 115200 8N1, 3.3 V TTL |
+
+Physical port mapping:
+
+| Chassis socket | OpenWrt device | Hardware path |
+|---|---|---|
+| LAN1 | `eth0`, logical WAN | Direct IPQ5018 PHY |
+| LAN2 | `lan1` | QCA8337 port 1 |
+| LAN3 | `lan2` | QCA8337 port 2 |
+| LAN4 | `lan3` | QCA8337 port 3 |
+
+More hardware detail is in [docs/hardware.md](docs/hardware.md).
+
+## Storage Contract
+
+OpenWrt is installed in the physical primary firmware partition at
+`0x00900000`. The alternate OEM firmware at `0x03b00000` remains untouched.
+OEM U-Boot may dynamically present the active physical slot as logical
+`rootfs`, so logical names can swap during fallback; physical offsets are the
+stable identifiers.
+
+The OpenWrt UBI uses the OEM-compatible volume IDs:
 
 ```text
-/root/src/openwrt-rg-ma3063/bin/targets/qualcommax/ipq50xx/
+ID  name         type
+0   kernel       static
+1   wifi_fw      static
+2   bt_fw        static
+3   ubi_rootfs   dynamic
+4   rootfs_data  dynamic
 ```
 
-| Artifact | Purpose | SHA-256 |
-|---|---|---|
-| `openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-initramfs-uImage.itb` | RAM-only TFTP test image | `9d3d4cbdcaaa319deb7fe8a44928d704081a373d523765f200c14cbd4b21f457` |
-| `openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-squashfs-sysupgrade.bin` | Permanent-install candidate, inspection only | `f139d15add8ae52d9c3bffbeac93852c0d31136f949ae75c782985ed0e793e0a` |
-| `openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-squashfs-factory.ubi` | UBI candidate, inspection only | `5f3d587ac133cb373f589c40430a5e53f6a8a6c9895de914ca34980bad88b94f` |
+The build preserves `wifi_fw` and `bt_fw` byte-for-byte while sysupgrade
+replaces only `kernel`, `ubi_rootfs`, and `rootfs_data`.
 
-The initramfs FIT is ARM64, LZMA-compressed, and has the required default
-configuration `config@mp03.5-c2`. All listed images are below the 50 MiB target
-slot limit.
+## Installation
 
-## Hardware Summary
+Read [docs/installation.md](docs/installation.md) completely before writing
+flash. The required flow is:
 
-- SoC: Qualcomm IPQ5000, compatible with the IPQ5018 OpenWrt target.
-- RAM: 256 MB DDR3.
-- Flash: 128 MB SPI NAND.
-- Wi-Fi: IPQ5018 internal 2.4 GHz radio and QCN6122 external 5 GHz radio.
-- Ethernet: one WAN port and three LAN ports through a QCA8337 switch.
+1. Back up every MTD partition and keep the backup outside Git.
+2. Boot the matching initramfs image through UART/TFTP.
+3. Validate Ethernet, both radios, MTD layout, and UBI volumes.
+4. Verify the sysupgrade SHA-256 and run `sysupgrade -T`.
+5. Run `sysupgrade -n` only after the RAM test passes.
 
-The documented NAND layout reserves two 50 MB firmware slots. The intended OpenWrt target is `rootfs` at offset `0x00900000`; `rootfs_1` is retained as an untouched vendor slot during initial testing.
+Do not replace U-Boot, modify ART, manually write BOOTCONFIG, or use U-Boot
+`flash` commands.
 
-## Safety Rules
+## Building
 
-- Do not replace or modify the OEM boot chain or U-Boot.
-- Do not write or erase ART (`mtd13`, offset `0x00780000`). It holds device MAC addresses and Wi-Fi calibration data.
-- Do not write bootloader, TrustZone, NAND-training, product-information, or vendor-data partitions.
-- Test the initramfs through UART/TFTP before considering a permanent install.
-- LED support is deliberately deferred until core Ethernet and Wi-Fi operation is validated.
+The repository contains public source changes but not the OEM firmware volumes,
+board-data files, NAND dumps, or generated images. Extract those inputs from
+your own device as described in [docs/building.md](docs/building.md).
 
-## Build Choices
-
-- OpenWrt target: `qualcommax/ipq50xx`.
-- Build branch: `openwrt-25.12`.
-- Wi-Fi: full `wpad`, ath11k AHB and PCI drivers.
-- Networking: normal IPv4 and IPv6 support, `odhcp6c`, `odhcpd`, `relayd`, and `luci-proto-relay`.
-- Excluded: `mwan3` and `luci-app-mwan3`.
-
-Before each build, review and approve the relevant selections in `make menuconfig`. The tracked configuration fragment remains the reproducible build input.
-
-## Build Location
-
-Build only inside this workspace or a Linux filesystem. Do not build the OpenWrt tree under a mounted Windows path such as `/mnt/d`; it is slower and can introduce file-system issues.
-
-## Rebuild
-
-The tracked inputs are applied to a separate OpenWrt checkout by
-`scripts/apply-local-patches.sh`. Run the build from its Linux filesystem path:
+The primary workflow is:
 
 ```sh
-cd /root/src/openwrt-rg-ma3063
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-FORCE_UNSAFE_CONFIGURE=1 make -j6 V=s
+./scripts/apply-local-patches.sh /path/to/openwrt
+cp src/config-fragment /path/to/openwrt/.config
+make -C /path/to/openwrt defconfig
+make -C /path/to/openwrt -j"$(nproc)"
 ```
 
-`FORCE_UNSAFE_CONFIGURE=1` is required only because this WSL checkout is built
-as `root`. The Linux-only `PATH` prevents GNU `find -execdir` from rejecting
-inherited Windows path entries during image assembly.
+The validated WSL build tree is kept on the Linux filesystem rather than under
+`/mnt/c` or `/mnt/d`.
 
-## Later Hardware Test
+## Repository Layout
 
-After the build passes structural checks and the router is available:
+```text
+docs/       hardware, build, installation, recovery, and findings
+images/     verified artifact names, sizes, and checksums only
+src/        config fragment, new OpenWrt files, and source patches
+scripts/    reproducible application, rebuild, and provenance checks
+tools/      BDF conversion and UART helpers
+```
 
-1. Enable developer mode and SSH on stock firmware.
-2. Back up ART, both stock rootfs slots, the U-Boot environment, stock Wi-Fi firmware, and a serial boot log.
-3. Connect a 3.3 V USB-to-TTL adapter at 115200 8N1.
-4. Load the initramfs with TFTP and boot it from RAM only:
+Private router data and build products are intentionally ignored by Git.
 
-   ```text
-   tftpboot 0x44000000 <initramfs-image>
-   bootm 0x44000000#config@mp03.5-c2
-   ```
-5. Verify WAN/LAN mapping, both Wi-Fi radios, ART-derived MAC addresses, calibration, reset-button behavior, and boot logs.
-6. Inspect U-Boot slot selection and stock UBI layout before any permanent flash.
+## Verified Artifacts
 
-## Sources And References
+The known-good artifact hashes are recorded in
+[images/sha256sums.txt](images/sha256sums.txt). Binaries are excluded because
+they contain OEM-derived firmware material.
 
-See [REFERENCES.md](REFERENCES.md) for pinned baseline and research sources.
+## References
+
+See [REFERENCES.md](REFERENCES.md) for upstream documentation, prior device
+work, and attribution.

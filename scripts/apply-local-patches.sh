@@ -16,13 +16,25 @@ caldata_hook="$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/etc/hotplu
 uboot_env="$openwrt_dir/package/boot/uboot-tools/uboot-envtools/files/qualcommax_ipq50xx"
 firmware_dir="$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/lib/firmware/ath11k"
 firmware_overlay="$openwrt_dir/files/lib/firmware/ath11k"
-firmware_source="$project_dir/router-data/stock-wifi-fw"
+firmware_source="$project_dir/router-data/bdf"
 qcn6122_bdf="$openwrt_dir/files/lib/firmware/ath11k/QCN6122/hw1.0/bdwlan.b60"
 kernel_patch_dir="$openwrt_dir/target/linux/qualcommax/patches-6.12"
 ssdk_mk="$openwrt_dir/package/kernel/qca-ssdk/Makefile"
-image_patch="$project_dir/files/patches/1000-image-oem-volume-layout.patch"
-oem_volume_source="$project_dir/router-data/stock-rootfs-mtd15/rootfs-mtd15.bin"
+image_patch="$project_dir/src/patches/1000-image-oem-volume-layout.patch"
+oem_volume_source="$project_dir/router-data/oem-volumes"
 oem_volume_dir="$openwrt_dir/target/linux/qualcommax/image/rg-ma3063-oem"
+
+# Accept the original research workspace layout without making it part of the
+# public build contract.
+[ -d "$firmware_source" ] || firmware_source="$project_dir/router-data/stock-wifi-fw"
+if [ ! -f "$oem_volume_source/wifi_fw.bin" ]; then
+	oem_volume_source="$project_dir/router-data/stock-rootfs-mtd15/rootfs-mtd15.bin"
+	oem_wifi_volume="$oem_volume_source/img-880995722_vol-wifi_fw.ubifs"
+	oem_bt_volume="$oem_volume_source/img-880995722_vol-bt_fw.ubifs"
+else
+	oem_wifi_volume="$oem_volume_source/wifi_fw.bin"
+	oem_bt_volume="$oem_volume_source/bt_fw.bin"
+fi
 
 test -d "$openwrt_dir"
 test -d "$dts_dir"
@@ -35,8 +47,8 @@ test -f "$firmware_source/qcn6122/bdwlan.b60"
 test -d "$kernel_patch_dir"
 test -f "$ssdk_mk"
 test -f "$image_patch"
-test -f "$oem_volume_source/img-880995722_vol-wifi_fw.ubifs"
-test -f "$oem_volume_source/img-880995722_vol-bt_fw.ubifs"
+test -f "$oem_wifi_volume"
+test -f "$oem_bt_volume"
 
 if grep -q 'UBI_KERNEL_FIRST UBI_KERNEL_STATIC UBI_ROOTFS_NAME' "$openwrt_dir/include/image.mk" &&
 	grep -q -- '--rootfs-name $(UBI_ROOTFS_NAME)' "$openwrt_dir/include/image-commands.mk" &&
@@ -50,11 +62,11 @@ else
 	exit 1
 fi
 
-cp "$project_dir/files/dts/ipq5018-ruijie-rg-ma3063.dts" "$dts_dir/"
-cp "$project_dir/files/base/etc/board.d/02_network" "$board_net"
+cp "$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" "$dts_dir/"
+cp "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" "$board_net"
 chmod 0755 "$board_net"
 mkdir -p "${wifi_defaults%/*}"
-cp "$project_dir/files/base/etc/uci-defaults/99-ma3063-disable-wifi" "$wifi_defaults"
+cp "$project_dir/src/new/files/etc/uci-defaults/99-ma3063-disable-wifi" "$wifi_defaults"
 chmod 0755 "$wifi_defaults"
 rm -f "$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/etc/init.d/fix-eth-mac"
 rm -f "$kernel_patch_dir/0913-net-dsa-qca8k-retry-switch-id-read.patch"
@@ -63,7 +75,7 @@ rm -f "$kernel_patch_dir/0913-net-dsa-qca8k-accept-rg-ma3063-switch-id.patch"
 rm -f "$kernel_patch_dir/0915-net-mdio-ipq4019-set-rg-ma3063-qsdk-mode.patch"
 rm -f "$kernel_patch_dir/0915-net-dsa-qca8k-rg-ma3063-reset-timing.patch"
 rm -f "$kernel_patch_dir/0914-net-mdio-ipq4019-diagnose-rg-ma3063-receive.patch"
-cp "$project_dir/files/patches/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch" \
+cp "$project_dir/src/new/target/linux/qualcommax/patches-6.12/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch" \
 	"$kernel_patch_dir/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch"
 
 # Upgrade only the OpenWrt volumes in rootfs. The OEM firmware volumes remain
@@ -88,8 +100,8 @@ mv "$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/lib/upgrade/platform
 	"$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/lib/upgrade/platform.sh"
 
 mkdir -p "$oem_volume_dir"
-cp "$oem_volume_source/img-880995722_vol-wifi_fw.ubifs" "$oem_volume_dir/wifi_fw.bin"
-cp "$oem_volume_source/img-880995722_vol-bt_fw.ubifs" "$oem_volume_dir/bt_fw.bin"
+cp "$oem_wifi_volume" "$oem_volume_dir/wifi_fw.bin"
+cp "$oem_bt_volume" "$oem_volume_dir/bt_fw.bin"
 
 # qca8k owns the external switch; retain SSDK only for the IPQ5018 dataplane.
 sed -i 's/ISISC_ENABLE=enable MHT_ENABLE=disable/ISISC_ENABLE=disable MHT_ENABLE=disable/' "$ssdk_mk"
@@ -100,7 +112,7 @@ awk '
 	!skip { print }
 ' "$device_mk" > "$device_mk.tmp"
 printf '\n' >> "$device_mk.tmp"
-cat "$project_dir/files/patches/device-makefile-entry.txt" >> "$device_mk.tmp"
+cat "$project_dir/src/device-makefile-entry.txt" >> "$device_mk.tmp"
 mv "$device_mk.tmp" "$device_mk"
 
 awk '

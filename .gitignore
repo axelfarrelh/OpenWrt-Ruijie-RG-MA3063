@@ -2,10 +2,23 @@
 openwrt/
 baseline-source/
 dl/
-# Router-specific data and sensitive backups
+
+# Router-specific data and sensitive backups. These can contain complete OEM
+# firmware, MAC addresses, calibration, serial numbers, WPS data, and secrets.
 backup/
 stock-firmware/
 router-data/
+logs/
+artifacts/
+*mtd*.bin
+*nand*.bin
+*boot-chain*.bin
+*productinfo*.bin
+*training*.bin
+*ttymtd*.bin
+art*.bin
+
+# Firmware and generated images
 *.bin
 *.itb
 *.img
@@ -13,8 +26,14 @@ router-data/
 *.tar
 *.tar.gz
 *.log
+images/*.bin
+images/*.itb
+images/*.img
+images/*.ubi
 
 # Local configuration and editor files
 .env
 .vscode/
 .idea/
+__pycache__/
+*.pyc

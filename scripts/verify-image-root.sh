@@ -12,6 +12,16 @@ target_base="build_dir/target-aarch64_cortex-a53_musl"
 pristine="$openwrt_dir/$target_base/root.orig-qualcommax"
 root="$openwrt_dir/$target_base/root-qualcommax"
 firmware_path="lib/firmware/ath11k"
+oem_volume_source="$project_dir/router-data/oem-volumes"
+
+if [ ! -f "$oem_volume_source/wifi_fw.bin" ]; then
+	oem_volume_source="$project_dir/router-data/stock-rootfs-mtd15/rootfs-mtd15.bin"
+	oem_wifi_volume="$oem_volume_source/img-880995722_vol-wifi_fw.ubifs"
+	oem_bt_volume="$oem_volume_source/img-880995722_vol-bt_fw.ubifs"
+else
+	oem_wifi_volume="$oem_volume_source/wifi_fw.bin"
+	oem_bt_volume="$oem_volume_source/bt_fw.bin"
+fi
 
 test -d "$pristine/$firmware_path/IPQ5018/hw1.0"
 test -d "$pristine/$firmware_path/QCN6122/hw1.0"
@@ -59,12 +69,12 @@ grep -q 'caldata_extract "0:ART" 0x26800 0x20000' "$hook"
 tree_dts="$openwrt_dir/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts"
 platform_upgrade="$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/lib/upgrade/platform.sh"
 wifi_defaults="$root/etc/uci-defaults/99-ma3063-disable-wifi"
-cmp -s "$project_dir/files/dts/ipq5018-ruijie-rg-ma3063.dts" "$tree_dts"
-cmp -s "$project_dir/files/base/etc/board.d/02_network" \
+cmp -s "$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" "$tree_dts"
+cmp -s "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" \
 	"$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network"
-cmp -s "$project_dir/files/base/etc/board.d/02_network" "$root/etc/board.d/02_network"
+cmp -s "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" "$root/etc/board.d/02_network"
 test -x "$root/etc/board.d/02_network"
-cmp -s "$project_dir/files/base/etc/uci-defaults/99-ma3063-disable-wifi" "$wifi_defaults"
+cmp -s "$project_dir/src/new/files/etc/uci-defaults/99-ma3063-disable-wifi" "$wifi_defaults"
 test -x "$wifi_defaults"
 grep -q 'config_foreach disable_radio wifi-device' "$wifi_defaults"
 grep -q 'uci set "wireless.$1.disabled=1"' "$wifi_defaults"
@@ -77,7 +87,7 @@ test ! -e "$openwrt_dir/target/linux/qualcommax/patches-6.12/0913-net-dsa-qca8k-
 test ! -e "$openwrt_dir/target/linux/qualcommax/patches-6.12/0915-net-mdio-ipq4019-set-rg-ma3063-qsdk-mode.patch"
 test ! -e "$openwrt_dir/target/linux/qualcommax/patches-6.12/0915-net-dsa-qca8k-rg-ma3063-reset-timing.patch"
 test ! -e "$openwrt_dir/target/linux/qualcommax/patches-6.12/0914-net-mdio-ipq4019-diagnose-rg-ma3063-receive.patch"
-cmp -s "$project_dir/files/patches/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch" \
+cmp -s "$project_dir/src/new/target/linux/qualcommax/patches-6.12/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch" \
 	"$openwrt_dir/target/linux/qualcommax/patches-6.12/0914-net-mdio-ipq4019-set-rg-ma3063-div64.patch"
 grep -q 'ISISC_ENABLE=disable MHT_ENABLE=disable' "$openwrt_dir/package/kernel/qca-ssdk/Makefile"
 grep -q '^CONFIG_PACKAGE_ath11k-firmware-ipq5018-qcn6122=y$' "$openwrt_dir/.config"
@@ -145,9 +155,9 @@ grep -q 'UBI_KERNEL_STATIC := 1' "$openwrt_dir/target/linux/qualcommax/image/ipq
 grep -q 'UBI_ROOTFS_NAME := ubi_rootfs' "$openwrt_dir/target/linux/qualcommax/image/ipq50xx.mk"
 grep -q 'wifi_fw=:' "$openwrt_dir/target/linux/qualcommax/image/ipq50xx.mk"
 grep -q 'bt_fw=:' "$openwrt_dir/target/linux/qualcommax/image/ipq50xx.mk"
-cmp -s "$project_dir/router-data/stock-rootfs-mtd15/rootfs-mtd15.bin/img-880995722_vol-wifi_fw.ubifs" \
+cmp -s "$oem_wifi_volume" \
 	"$openwrt_dir/target/linux/qualcommax/image/rg-ma3063-oem/wifi_fw.bin"
-cmp -s "$project_dir/router-data/stock-rootfs-mtd15/rootfs-mtd15.bin/img-880995722_vol-bt_fw.ubifs" \
+cmp -s "$oem_bt_volume" \
 	"$openwrt_dir/target/linux/qualcommax/image/rg-ma3063-oem/bt_fw.bin"
 
 echo "Image root provenance verified."

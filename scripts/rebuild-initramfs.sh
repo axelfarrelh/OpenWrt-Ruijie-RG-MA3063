@@ -14,6 +14,7 @@ prepare_only=${2:-}
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 openwrt_dir=$1
+firmware_source="$project_dir/router-data/bdf"
 root_dir="$openwrt_dir/build_dir/target-aarch64_cortex-a53_musl/root-qualcommax"
 pristine_dir="$openwrt_dir/build_dir/target-aarch64_cortex-a53_musl/root.orig-qualcommax"
 toolchain_dir="$openwrt_dir/staging_dir/toolchain-aarch64_cortex-a53_gcc-14.3.0_musl/bin"
@@ -22,6 +23,7 @@ test -d "$openwrt_dir"
 test -d "$root_dir"
 test -d "$pristine_dir"
 test -d "$toolchain_dir"
+[ -d "$firmware_source" ] || firmware_source="$project_dir/router-data/stock-wifi-fw"
 
 "$project_dir/scripts/apply-local-patches.sh" "$openwrt_dir"
 
@@ -45,11 +47,11 @@ cp -a "$pristine_dir/lib/firmware/ath11k/QCN6122/hw1.0" \
 	"$root_dir/lib/firmware/ath11k/QCN6122/"
 
 # Apply only the board-specific data and calibration hook after restoration.
-cp "$project_dir/router-data/stock-wifi-fw"/bdwlan.* \
+cp "$firmware_source"/bdwlan.* \
 	"$root_dir/lib/firmware/ath11k/IPQ5018/hw1.0/"
-cp "$project_dir/router-data/stock-wifi-fw/bdwlan.b23" \
+cp "$firmware_source/bdwlan.b23" \
 	"$root_dir/lib/firmware/ath11k/IPQ5018/hw1.0/board.bin"
-cp "$project_dir/router-data/stock-wifi-fw/qcn6122"/bdwlan.* \
+cp "$firmware_source/qcn6122"/bdwlan.* \
 	"$root_dir/lib/firmware/ath11k/QCN6122/hw1.0/"
 cp "$openwrt_dir/files/lib/firmware/ath11k/QCN6122/hw1.0/bdwlan.b60" \
 	"$root_dir/lib/firmware/ath11k/QCN6122/hw1.0/bdwlan.b60"

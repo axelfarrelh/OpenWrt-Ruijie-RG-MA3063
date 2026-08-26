@@ -1,0 +1,4 @@
+9ad5c348ddfb91d40fbc5601faf89db54b32adecc6449db1187855a906054ba0  openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-initramfs-uImage.itb
+460f518d33075eec5a96e79c0a675af6af303371273f38be63db8baf12246403  openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-persistent-kernel.itb
+12fad90288fd7cdb4f33b538036261644d55464288bb3e96b0f7266a958235b7  openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-squashfs-factory.ubi
+81e7833a99e3447f8a29ff7acd8c609c296604a300dd4291b9724b118ba80a0c  openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-squashfs-sysupgrade.bin
