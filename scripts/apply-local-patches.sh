@@ -19,6 +19,16 @@ firmware_overlay="$openwrt_dir/files/lib/firmware/ath11k"
 firmware_source="$project_dir/router-data/bdf"
 qcn6122_bdf="$openwrt_dir/files/lib/firmware/ath11k/QCN6122/hw1.0/bdwlan.b60"
 kernel_patch_dir="$openwrt_dir/target/linux/qualcommax/patches-6.12"
+ath11k_patch_dir="$openwrt_dir/package/kernel/mac80211/patches/ath11k"
+ath11k_experiment=${ATH11K_RING_EXPERIMENT:-}
+ath11k_candidate_a="$project_dir/src/experimental/ath11k/949-ath11k-reduce-rx-monitor-rings-candidate-a.patch"
+ath11k_candidate_a_target="$ath11k_patch_dir/949-ath11k-reduce-rx-monitor-rings-candidate-a.patch"
+ath11k_candidate_b="$project_dir/src/experimental/ath11k/949-ath11k-reduce-rings-candidate-b.patch"
+ath11k_candidate_b_target="$ath11k_patch_dir/949-ath11k-reduce-rings-candidate-b.patch"
+ath11k_candidate_c_rings="$project_dir/src/experimental/ath11k/949-ath11k-oem-like-rings-candidate-c.patch"
+ath11k_candidate_c_rings_target="$ath11k_patch_dir/949-ath11k-oem-like-rings-candidate-c.patch"
+ath11k_candidate_c_cache="$project_dir/src/experimental/ath11k/950-ath11k-private-rxdma-page-frag-candidate-c.patch"
+ath11k_candidate_c_cache_target="$ath11k_patch_dir/950-ath11k-private-rxdma-page-frag-candidate-c.patch"
 ssdk_mk="$openwrt_dir/package/kernel/qca-ssdk/Makefile"
 image_patch="$project_dir/src/patches/1000-image-oem-volume-layout.patch"
 oem_volume_source="$project_dir/router-data/oem-volumes"
@@ -45,10 +55,41 @@ test -f "$uboot_env"
 test -f "$firmware_source/bdwlan.b23"
 test -f "$firmware_source/qcn6122/bdwlan.b60"
 test -d "$kernel_patch_dir"
+test -d "$ath11k_patch_dir"
 test -f "$ssdk_mk"
 test -f "$image_patch"
 test -f "$oem_wifi_volume"
 test -f "$oem_bt_volume"
+
+case "$ath11k_experiment" in
+	"")
+		rm -f "$ath11k_candidate_a_target" "$ath11k_candidate_b_target" \
+			"$ath11k_candidate_c_rings_target" "$ath11k_candidate_c_cache_target"
+		;;
+	candidate-a)
+		rm -f "$ath11k_candidate_b_target" "$ath11k_candidate_c_rings_target" \
+			"$ath11k_candidate_c_cache_target"
+		test -f "$ath11k_candidate_a"
+		cp "$ath11k_candidate_a" "$ath11k_candidate_a_target"
+		;;
+	candidate-b)
+		rm -f "$ath11k_candidate_a_target" "$ath11k_candidate_c_rings_target" \
+			"$ath11k_candidate_c_cache_target"
+		test -f "$ath11k_candidate_b"
+		cp "$ath11k_candidate_b" "$ath11k_candidate_b_target"
+		;;
+	candidate-c)
+		rm -f "$ath11k_candidate_a_target" "$ath11k_candidate_b_target"
+		test -f "$ath11k_candidate_c_rings"
+		test -f "$ath11k_candidate_c_cache"
+		cp "$ath11k_candidate_c_rings" "$ath11k_candidate_c_rings_target"
+		cp "$ath11k_candidate_c_cache" "$ath11k_candidate_c_cache_target"
+		;;
+	*)
+		echo "Unknown ATH11K_RING_EXPERIMENT: $ath11k_experiment" >&2
+		exit 1
+		;;
+esac
 
 if grep -q 'UBI_KERNEL_FIRST UBI_KERNEL_STATIC UBI_ROOTFS_NAME' "$openwrt_dir/include/image.mk" &&
 	grep -q -- '--rootfs-name $(UBI_ROOTFS_NAME)' "$openwrt_dir/include/image-commands.mk" &&
@@ -63,6 +104,12 @@ else
 fi
 
 cp "$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" "$dts_dir/"
+if [ "$ath11k_experiment" = candidate-c ]; then
+	sed -i 's/qcom,ath11k-fw-memory-mode = <1>;/qcom,ath11k-fw-memory-mode = <2>;/g' \
+		"$dts_dir/ipq5018-ruijie-rg-ma3063.dts"
+	test "$(grep -c 'qcom,ath11k-fw-memory-mode = <2>;' \
+		"$dts_dir/ipq5018-ruijie-rg-ma3063.dts")" -eq 2
+fi
 cp "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" "$board_net"
 chmod 0755 "$board_net"
 mkdir -p "${wifi_defaults%/*}"

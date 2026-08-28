@@ -16,13 +16,16 @@ Working:
 - Direct IPQ5018 Ethernet PHY and QCA8337 DSA switch.
 - All four chassis Ethernet sockets.
 - NSS dataplane, LuCI, SSH, sysupgrade, and OEM-slot fallback.
+- A 24 MHz board XO, 32 kHz sleep clock, active Qualcomm hardware watchdog,
+  and a fixed 1.008 GHz CPU policy.
 
 Open issues:
 
 - ath11k uses most of the available RAM when both radios are loaded. Ring-size
-  reduction is being evaluated in RAM-only builds and is not part of the
-  known-good baseline.
-- The watchdog and CPU-frequency drivers report missing-clock warnings.
+  and allocator Candidate C passed RAM-only and persistent 2.4/5 GHz testing,
+  including a 60-minute 5 GHz reverse run at 304 Mbit/s. Candidate C is the
+  validated deployed profile; it remains an opt-in build rather than the
+  normal `apply-local-patches.sh` path.
 - OpenWrt does not yet install a persistent `/etc/fw_env.config`.
 - LEDs are not implemented.
 

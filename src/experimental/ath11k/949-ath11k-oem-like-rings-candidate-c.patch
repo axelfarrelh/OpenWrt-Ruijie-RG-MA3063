@@ -1,0 +1,39 @@
+From: OpenWrt RG-MA3063 project
+Subject: wifi: ath11k: use OEM-like low-memory rings for Candidate C
+
+Candidate C uses the RG-MA3063 OEM low-memory profile where the vendor and
+upstream ring meanings are directly comparable. Keep the upstream RX refill
+buffer-size contract and error/monitor descriptor rings unchanged.
+
+The combined ring, firmware-mode, and allocator profile passed repeated
+RAM-only and persistent sustained-traffic tests on RG-MA3063. Keep it opt-in so
+normal builds do not silently change ath11k resource sizing on other devices.
+
+--- a/drivers/net/wireless/ath/ath11k/dp.h
++++ b/drivers/net/wireless/ath/ath11k/dp.h
+@@ -206,7 +206,7 @@ struct ath11k_pdev_dp {
+ #define DP_WBM_RELEASE_RING_SIZE	64
+ #define DP_TCL_DATA_RING_SIZE		512
+ #define DP_TCL_DATA_RING_SIZE_WCN6750	2048
+-#define DP_TX_COMP_RING_SIZE		32768
++#define DP_TX_COMP_RING_SIZE		8192
+ #define DP_TX_IDR_SIZE			DP_TX_COMP_RING_SIZE
+ #define DP_TCL_CMD_RING_SIZE		32
+ #define DP_TCL_STATUS_RING_SIZE		32
+@@ -217,12 +217,12 @@ struct ath11k_pdev_dp {
+ #define DP_REO_EXCEPTION_RING_SIZE	128
+ #define DP_REO_CMD_RING_SIZE		256
+ #define DP_REO_STATUS_RING_SIZE		2048
+-#define DP_RXDMA_BUF_RING_SIZE		4096
++#define DP_RXDMA_BUF_RING_SIZE		1024
+ #define DP_RXDMA_REFILL_RING_SIZE	2048
+ #define DP_RXDMA_ERR_DST_RING_SIZE	1024
+-#define DP_RXDMA_MON_STATUS_RING_SIZE	1024
+-#define DP_RXDMA_MONITOR_BUF_RING_SIZE	4096
+-#define DP_RXDMA_MONITOR_DST_RING_SIZE	2048
++#define DP_RXDMA_MON_STATUS_RING_SIZE	512
++#define DP_RXDMA_MONITOR_BUF_RING_SIZE	128
++#define DP_RXDMA_MONITOR_DST_RING_SIZE	128
+ #define DP_RXDMA_MONITOR_DESC_RING_SIZE	4096
+ 
+ #define DP_RX_RELEASE_RING_NUM	3

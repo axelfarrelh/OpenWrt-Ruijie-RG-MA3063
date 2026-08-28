@@ -11,6 +11,7 @@ openwrt_dir=$1
 target_base="build_dir/target-aarch64_cortex-a53_musl"
 pristine="$openwrt_dir/$target_base/root.orig-qualcommax"
 root="$openwrt_dir/$target_base/root-qualcommax"
+dtb="$openwrt_dir/$target_base/linux-qualcommax_ipq50xx/image-ipq5018-ruijie-rg-ma3063.dtb"
 firmware_path="lib/firmware/ath11k"
 oem_volume_source="$project_dir/router-data/oem-volumes"
 
@@ -69,7 +70,13 @@ grep -q 'caldata_extract "0:ART" 0x26800 0x20000' "$hook"
 tree_dts="$openwrt_dir/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts"
 platform_upgrade="$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/lib/upgrade/platform.sh"
 wifi_defaults="$root/etc/uci-defaults/99-ma3063-disable-wifi"
-cmp -s "$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" "$tree_dts"
+if [ "${ATH11K_RING_EXPERIMENT:-}" = candidate-c ]; then
+	sed 's/qcom,ath11k-fw-memory-mode = <1>;/qcom,ath11k-fw-memory-mode = <2>;/g' \
+		"$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" |
+		cmp -s - "$tree_dts"
+else
+	cmp -s "$project_dir/src/new/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-ruijie-rg-ma3063.dts" "$tree_dts"
+fi
 cmp -s "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" \
 	"$openwrt_dir/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network"
 cmp -s "$project_dir/src/new/target/linux/qualcommax/ipq50xx/base-files/etc/board.d/02_network" "$root/etc/board.d/02_network"
@@ -112,6 +119,9 @@ grep -q 'ubi.mtd=rootfs' "$tree_dts"
 grep -q 'ubi.block=0,3' "$tree_dts"
 grep -q 'rootfstype=squashfs rootwait' "$tree_dts"
 ! grep -q 'root=mtd:ubi_rootfs' "$tree_dts"
+grep -A2 '^&sleep_clk {' "$tree_dts" | grep -q 'clock-frequency = <32000>;'
+grep -A3 '^&xo_board_clk {' "$tree_dts" | grep -q 'clock-mult = <1>;'
+grep -A3 '^&xo_board_clk {' "$tree_dts" | grep -q 'clock-div = <4>;'
 ! grep -q 'reset_gpio' "$tree_dts"
 grep -q 'switch1: ethernet-switch@17' "$tree_dts"
 grep -q 'reg = <17>;' "$tree_dts"
@@ -159,5 +169,10 @@ cmp -s "$oem_wifi_volume" \
 	"$openwrt_dir/target/linux/qualcommax/image/rg-ma3063-oem/wifi_fw.bin"
 cmp -s "$oem_bt_volume" \
 	"$openwrt_dir/target/linux/qualcommax/image/rg-ma3063-oem/bt_fw.bin"
+
+test -f "$dtb"
+test "$(fdtget -t i "$dtb" /clocks/sleep-clk clock-frequency)" -eq 32000
+test "$(fdtget -t i "$dtb" /clocks/xo-board-clk clock-mult)" -eq 1
+test "$(fdtget -t i "$dtb" /clocks/xo-board-clk clock-div)" -eq 4
 
 echo "Image root provenance verified."

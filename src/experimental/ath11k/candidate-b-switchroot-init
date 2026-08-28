@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+export INITRAMFS=1
+
+fail() {
+	echo "Candidate B switch-root failed: $*" >&2
+	exec /bin/ash
+}
+
+mkdir -p /rom /overlay/upper /overlay/work /new_root
+mount -t proc proc /proc || fail "cannot mount /proc"
+mount -t sysfs sysfs /sys || fail "cannot mount /sys"
+
+i=0
+while [ ! -f /sys/class/block/ubiblock0_3/dev ] && [ "$i" -lt 15 ]; do
+	sleep 1
+	i=$((i + 1))
+done
+
+[ -f /sys/class/block/ubiblock0_3/dev ] || fail "ubiblock0_3 not found"
+device=$(cat /sys/class/block/ubiblock0_3/dev)
+major=${device%:*}
+minor=${device#*:}
+mknod /dev/ubiblock0_3 b "$major" "$minor" || fail "cannot create ubiblock0_3"
+mount -t squashfs -o ro /dev/ubiblock0_3 /rom || fail "cannot mount ubi_rootfs"
+mount -t tmpfs -o noatime,mode=0755 candidate-b-overlay /overlay ||
+	fail "cannot mount temporary overlay"
+mkdir -p /overlay/upper/lib/modules/6.12.94 /overlay/work
+
+for module in ath11k.ko ath11k_ahb.ko ath11k_pci.ko; do
+	source="/lib/modules/6.12.94/$module"
+	[ -f "$source" ] || fail "$source not found"
+	cp "$source" "/overlay/upper/lib/modules/6.12.94/$module" ||
+		fail "cannot stage $module"
+done
+
+mkdir -p /overlay/upper/etc
+cat > /overlay/upper/etc/candidate-b-switchroot <<'EOF'
+Candidate B cold-boot RAM-only switch-root test
+EOF
+
+mount -t overlay overlay \
+	-o noatime,lowerdir=/rom,upperdir=/overlay/upper,workdir=/overlay/work \
+	/new_root || fail "cannot mount overlay root"
+
+mkdir -p /new_root/dev /new_root/proc /new_root/sys /new_root/rom /new_root/overlay
+mount -t tmpfs -o mode=0755 tmpfs /new_root/dev || fail "cannot mount new /dev"
+cp -a /dev/. /new_root/dev/ || fail "cannot populate new /dev"
+mount -o move /proc /new_root/proc || fail "cannot move /proc"
+mount -o move /sys /new_root/sys || fail "cannot move /sys"
+mount -o move /rom /new_root/rom || fail "cannot move /rom"
+mount -o move /overlay /new_root/overlay || fail "cannot move /overlay"
+
+echo "Starting installed OpenWrt with Candidate B modules from RAM"
+exec switch_root /new_root /sbin/init

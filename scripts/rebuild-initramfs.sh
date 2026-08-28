@@ -15,6 +15,7 @@ prepare_only=${2:-}
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 openwrt_dir=$1
 firmware_source="$project_dir/router-data/bdf"
+initramfs_init_override=${INITRAMFS_INIT_OVERRIDE:-}
 root_dir="$openwrt_dir/build_dir/target-aarch64_cortex-a53_musl/root-qualcommax"
 pristine_dir="$openwrt_dir/build_dir/target-aarch64_cortex-a53_musl/root.orig-qualcommax"
 toolchain_dir="$openwrt_dir/staging_dir/toolchain-aarch64_cortex-a53_gcc-14.3.0_musl/bin"
@@ -68,6 +69,12 @@ cp "$openwrt_dir/files/etc/uci-defaults/99-ma3063-disable-wifi" \
 	"$root_dir/etc/uci-defaults/99-ma3063-disable-wifi"
 chmod 0755 "$root_dir/etc/uci-defaults/99-ma3063-disable-wifi"
 rm -f "$root_dir/etc/init.d/fix-eth-mac" "$root_dir/etc/rc.d/S19fix-eth-mac"
+
+if [ -n "$initramfs_init_override" ]; then
+	test -f "$initramfs_init_override"
+	cp "$initramfs_init_override" "$root_dir/init"
+	chmod 0755 "$root_dir/init"
+fi
 
 "$project_dir/scripts/verify-image-root.sh" "$openwrt_dir"
 

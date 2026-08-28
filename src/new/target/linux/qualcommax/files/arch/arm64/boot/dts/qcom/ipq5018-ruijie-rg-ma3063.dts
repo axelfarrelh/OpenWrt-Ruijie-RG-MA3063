@@ -46,6 +46,15 @@
 	};
 };
 
+&sleep_clk {
+	clock-frequency = <32000>;
+};
+
+&xo_board_clk {
+	clock-mult = <1>;
+	clock-div = <4>;
+};
+
 &blsp1_uart1 {
 	status = "okay";
 };
